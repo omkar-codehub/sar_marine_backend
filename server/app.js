@@ -25,7 +25,7 @@ app.use('/tiles/ship', express.static(path.join(__dirname, '../shared/tiles/ship
 
 app.use('/api/images', imageRoutes);
 app.use('/api/dzi', dziRoutes);
-// app.use('/api/detect', detectionRoutes);
+app.use('/api/detect', detectionRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

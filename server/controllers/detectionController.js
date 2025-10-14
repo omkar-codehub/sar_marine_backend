@@ -16,7 +16,7 @@ exports.runDetection = async (req, res) => {
 
   try {
     // Call Python backend: /detect/{type}/{imageId}
-    const response = await axios.post(`${PYTHON_API_BASE}/detect/${type}/${imageId}`);
+    const response = await axios.post(`${PYTHON_API_BASE}/detect/dzi/${type}/${imageId}`);
 
     return res.status(200).json({
       message: `${type === 'ship' ? 'Ship' : 'Oil spill'} detection completed`,

@@ -5,4 +5,4 @@ app = FastAPI()
 
 # Register routes
 app.include_router(dzi_routes.router)
-# app.include_router(detection_routes.router)
+app.include_router(detection_routes.router)
