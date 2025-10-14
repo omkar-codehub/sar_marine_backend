@@ -58,5 +58,5 @@ router.post('/upload/:type', uploadHandler, imageController.uploadImage);
 // List uploaded images
 // List uploaded images by type (ship or oilspill)
 router.get('/uploads/:type', imageController.listUploadsByType);
-
+router.get('/outputs/oilspill',imageController.listOilspillOutputsDzi)
 module.exports = router;

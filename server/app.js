@@ -21,7 +21,7 @@ app.use('/tiles/oilspill', express.static(path.join(__dirname, '../shared/tiles/
 
 // Serve ship detection DZI tiles
 app.use('/tiles/ship', express.static(path.join(__dirname, '../shared/tiles/ship')));
-
+app.use('/outputs/oilspill',express.static(path.join(__dirname,'../shared/outputs/oilspill')))
 
 app.use('/api/images', imageRoutes);
 app.use('/api/dzi', dziRoutes);

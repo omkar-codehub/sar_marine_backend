@@ -58,3 +58,23 @@ exports.listUploadsByType = (req, res) => {
     res.json({ images: result });
   });
 };
+
+exports.listOilspillOutputsDzi = (req, res) => {
+  const dirPath = path.join(__dirname, `../../shared/outputs/oilspill`);
+  const files = fs.readdirSync(dirPath);
+
+    // Filter .dzi files
+    const dziFiles = files.filter(file => file.endsWith('.dzi'));
+
+    // Map to full path (or relative path if needed)
+    const dziList = dziFiles.map(file => {
+      const name = path.basename(file, '.dzi');
+      return {
+        dziFile: file,
+        dziPath: path.join(dirPath, file),
+        filesFolder: path.join(dirPath, `${name}_files`)
+      };
+    });
+
+    res.json({ count: dziList.length, items: dziList });
+}

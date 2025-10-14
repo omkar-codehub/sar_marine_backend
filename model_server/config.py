@@ -9,4 +9,4 @@ OUTPUTS_DIR = Path(os.getenv('OUTPUTS_DIR', BASE_DIR / "shared/outputs"))
 
 # Paths to models
 SHIP_MODEL_PATH = Path(os.getenv('SHIP_MODEL_PATH', BASE_DIR / "model_server/models"))
-OILSPILL_MODEL_PATH = Path(os.getenv('OILSPILL_MODEL_PATH', BASE_DIR / "models/oilspill_model.pth"))
+OILSPILL_MODEL_PATH = Path(os.getenv('OILSPILL_MODEL_PATH', BASE_DIR / "model_server/models/oil_spill.pth"))

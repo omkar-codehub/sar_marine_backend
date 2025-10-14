@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from config import TILES_DIR
 from services.ship_detector import detect_ships
-# from services.dzi_oilspill_detector import detect_oilspill_dzi
+from services.oilspill_detector import detect_oilspill
 from pathlib import Path
 
 router = APIRouter()
@@ -34,8 +34,8 @@ def detect_from_dzi(type: str, image_id: str):
     try:
         if type == "ship":
             results = detect_ships(str(dzi_folder), max_zoom_level)
-        # else:
-        #     results = detect_oilspill_dzi(str(dzi_folder), max_zoom_level)
+        else:
+            results = detect_oilspill(str(dzi_folder), max_zoom_level)
 
         return {
             "message": f"{type.capitalize()} DZI detection complete.",
