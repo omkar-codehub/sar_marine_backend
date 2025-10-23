@@ -23,8 +23,11 @@ app.use('/tiles/oilspill', express.static(path.join(__dirname, '../shared/tiles/
 app.use('/tiles/ship', express.static(path.join(__dirname, '../shared/tiles/ship')));
 app.use('/outputs/oilspill',express.static(path.join(__dirname,'../shared/outputs/oilspill')))
 
+// uploading images and gettiing list of images
 app.use('/api/images', imageRoutes);
+// DZI generation routes for uploaded images
 app.use('/api/dzi', dziRoutes);
+// Detection routes for ship and oil spill
 app.use('/api/detect', detectionRoutes);
 
 app.listen(PORT, () => {
