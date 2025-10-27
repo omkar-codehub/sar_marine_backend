@@ -1,261 +1,302 @@
-# API Documentation for Image Processing Server
+# API Documentation for Image Processing and Detection System
 
-This document outlines the API endpoints for the image processing server, including routes, HTTP methods, expected inputs, and outputs. The server handles image uploads, DZI (Deep Zoom Image) generation, and detection tasks for ship and oil spill imagery. The Node.js server proxies certain requests (DZI generation and detection) to a Python backend for processing.
+This document provides detailed information about the **Node.js** and **Python-based** integrated image processing server. The system manages image uploads, Deep Zoom Image (DZI) generation, and asynchronous detection for **ship** (bounding boxes) and **oil spill** (mask output) imagery. The backend uses **MongoDB** for storing detection results and job statuses.
+
+---
 
 ## Base URL
-`http://localhost:3000` (or the configured `PORT` environment variable)
 
-## Routes Overview
+`http://localhost:3000` (configurable via the `PORT` environment variable)
 
-### 1. Image Upload Routes (`/api/images`)
-Handles uploading and listing TIFF images for specific types (`ship` or `oilspill`).
+Python processing service: `http://localhost:8000`
 
-#### POST `/api/images/upload/:type`
+---
+
+## 1. Image Upload Routes (`/api/images`)
+
+### POST `/api/images/upload/:type`
+
 Uploads a TIFF image for the specified type (`ship` or `oilspill`).
 
-- **Method**: POST
-- **Parameters**:
-  - `type` (path parameter): Type of image. Must be `"ship"` or `"oilspill"`.
-- **Body** (multipart/form-data):
-  - `image`: A TIFF file (`.tif` or `.tiff`). Maximum size: 5GB.
-- **Response**:
-  - **Success (201)**:
-    ```json
+**Method:** POST
+**Path Parameters:**
+
+* `type`: `ship` or `oilspill`
+
+**Body (multipart/form-data):**
+
+* `image`: TIFF image file (`.tif` or `.tiff`)
+
+**Success (201):**
+
+```json
+{
+  "message": "Image uploaded successfully",
+  "type": "ship",
+  "file": {
+    "imageId": "<unique-image-id>",
+    "filename": "<generated-filename>",
+    "size": <file-size>,
+    "uploadPath": "/uploads/ship/<filename>"
+  }
+}
+```
+
+**Error (400):**
+
+```json
+{
+  "error": "Invalid upload type" | "Only TIFF files are allowed" | "No file uploaded"
+}
+```
+
+---
+
+### GET `/api/images/uploads/:type`
+
+Lists all uploaded images for a given type.
+
+**Method:** GET
+**Path Parameters:**
+
+* `type`: `ship` or `oilspill`
+
+**Success (200):**
+
+```json
+{
+  "images": [
     {
-      "message": "Image uploaded successfully",
-      "type": "ship" | "oilspill",
-      "file": {
-        "imageId": "<unique-image-id (filename without extension)>",
-        "filename": "<generated-filename (e.g., timestamp-originalname)>",
-        "originalname": "<original-filename>",
-        "mimetype": "image/tiff",
-        "size": <file-size-in-bytes>,
-        "uploadPath": "/uploads/<type>/<generated-filename>"
-      }
+      "imageId": "<unique-image-id>",
+      "filename": "<filename>",
+      "uploadUrl": "/uploads/<type>/<filename>"
     }
-    ```
-  - **Error (400)**:
-    ```json
+  ]
+}
+```
+
+**Error (400):**
+
+```json
+{
+  "error": "Invalid image type. Use 'ship' or 'oilspill'."
+}
+```
+
+---
+
+## 2. DZI Generation Routes (`/api/dzi`)
+
+### POST `/api/dzi/generate/:type/:imageId`
+
+Generates DZI tiles for the specified image. Required before detection.
+
+**Method:** POST
+**Path Parameters:**
+
+* `type`: `ship` or `oilspill`
+* `imageId`: Unique image identifier
+
+**Success (200):**
+
+```json
+{
+  "message": "DZI generated successfully",
+  "dzi_url": "/tiles/<type>/<imageId>/<imageId>.dzi"
+}
+```
+
+**Error (400/500):**
+
+```json
+{
+  "error": "Invalid type or generation failure"
+}
+```
+
+---
+
+## 3. Detection Routes (`/api/detect`)
+
+Detection is processed **asynchronously**. When initiated, the server immediately returns a job identifier. The detection process is handled by the Python service in the background, and results are reported to the Node.js server via a webhook.
+
+### POST `/api/detect/:type/:imageId`
+
+Initiates detection for a specified image.
+
+**Method:** POST
+**Path Parameters:**
+
+* `type`: `ship` or `oilspill`
+* `imageId`: Unique image identifier
+
+**Response (202 Accepted):**
+
+```json
+{
+  "accepted": true,
+  "jobId": "<uuid>",
+  "message": "ship detection queued"
+}
+```
+
+**Process:**
+
+1. Node.js stores a job entry in MongoDB with status `queued`.
+2. The Python service is triggered asynchronously via `/start_detection`.
+3. The Python service performs the detection and posts results to `/api/detect/webhook`.
+4. The Node.js server updates the job status to `completed` or `failed`.
+
+---
+
+### POST `/api/detect/webhook`
+
+This endpoint is used internally. The Python service sends detection results to this webhook after background processing.
+
+**Request Body:**
+
+```json
+{
+  "job_id": "<uuid>",
+  "type": "ship",
+  "image_id": "<image-id>",
+  "detections": [
     {
-      "error": "No file uploaded" | "Only TIFF files are allowed!" | "Invalid upload type" | "File size exceeds limit"
+      "x": 120.5,
+      "y": 250.8,
+      "w": 42.3,
+      "h": 25.1,
+      "label": "ship",
+      "score": 0.94
     }
-    ```
-- **Notes**: The `imageId` is derived from the generated filename and is used in subsequent routes like DZI generation and detection.
-- **Example**:
-  ```bash
-  curl -X POST -F "image=@sample.tiff" http://localhost:3000/api/images/upload/ship
-  ```
+  ]
+}
+```
 
-#### GET `/api/images/uploads/:type`
-Lists all uploaded TIFF images for the specified type (`ship` or `oilspill`).
+**Response:**
 
-- **Method**: GET
-- **Parameters**:
-  - `type` (path parameter): Type of image. Must be `"ship"` or `"oilspill"`.
-- **Body**: None
-- **Response**:
-  - **Success (200)**:
-    ```json
-    {
-      "images": [
-        {
-          "imageId": "<unique-image-id>",
-          "filename": "<filename>",
-          "type": "ship" | "oilspill",
-          "uploadUrl": "/uploads/<type>/<filename>"
-        },
-        ...
-      ]
-    }
-    ```
-  - **Error (400)**:
-    ```json
-    {
-      "error": "Invalid image type. Use \"ship\" or \"oilspill\"."
-    }
-    ```
-  - **Error (500)**:
-    ```json
-    {
-      "error": "Unable to list uploads for type: <type>"
-    }
-    ```
-- **Example**:
-  ```bash
-  curl http://localhost:3000/api/images/uploads/ship
-  ```
+```json
+{ "received": true }
+```
 
-#### GET `/api/images/outputs/oilspill`
-Lists all DZI output files for oil spill detection masks (located in `shared/outputs/oilspill`).
+**Webhook Logic:**
 
-- **Method**: GET
-- **Parameters**: None
-- **Body**: None
-- **Response**:
-  - **Success (200)**:
-    ```json
-    {
-      "count": <number-of-dzi-files>,
-      "items": [
-        {
-          "dziFile": "<imageId>.dzi",
-          "dziPath": "<absolute-server-path-to-dzi-file>",
-          "filesFolder": "<absolute-server-path-to-tiles-folder (e.g., imageId_files)>"
-        },
-        ...
-      ]
-    }
-    ```
-  - **Notes**: The `dziPath` and `filesFolder` are absolute server paths. For frontend access, use URLs like `/outputs/oilspill/<imageId>.dzi` and `/outputs/oilspill/<imageId>_files/<zoom>/<x>_<y>.jpeg`.
-- **Example**:
-  ```bash
-  curl http://localhost:3000/api/images/outputs/oilspill
-  ```
+| Type     | Data Stored                 | detectionsCount      | Description                                              |
+| -------- | --------------------------- | -------------------- | -------------------------------------------------------- |
+| ship     | Detection + Job collections | Number of detections | Bounding boxes are saved                                 |
+| oilspill | Job collection only         | `null`               | Only job status is updated; output mask is saved on disk |
 
-### 2. DZI Generation Routes (`/api/dzi`)
-Generates DZI files for uploaded images to enable deep zoom functionality. Proxies to Python backend if DZI does not already exist.
+---
 
-#### POST `/api/dzi/generate/:type/:imageId`
-Generates a DZI file for the specified image and type.
+### GET `/api/detect/status/:jobId`
 
-- **Method**: POST
-- **Parameters**:
-  - `type` (path parameter): Type of image. Must be `"ship"` or `"oilspill"`.
-  - `imageId` (path parameter): Unique ID of the uploaded image (from upload response).
-- **Body**: None
-- **Response**:
-  - **Success (200)**:
-    - If DZI already exists:
-      ```json
-      {
-        "message": "DZI already exists",
-        "dziUrl": "/tiles/<type>/<imageId>/<imageId>.dzi"
-      }
-      ```
-    - If generated successfully (via Python backend):
-      ```json
-      {
-        "message": "DZI generated successfully",
-        "dzi_url": "/tiles/<type>/<imageId>/<imageId>.dzi"
-      }
-      ```
-  - **Error (400)**:
-    ```json
-    {
-      "error": "Invalid type. Must be \"ship\" or \"oilspill\"."
-    }
-    ```
-  - **Error (500)**:
-    ```json
-    {
-      "error": "Failed to generate DZI via Python service" | "<other-error-from-python (e.g., Image not found)>"
-    }
-    ```
-- **Notes**: The Python backend uses a tile size of 512 for `"ship"` and 256 for `"oilspill"`. The DZI file and tiles are stored in `shared/tiles/<type>/<imageId>`.
-- **Example**:
-  ```bash
-  curl -X POST http://localhost:3000/api/dzi/generate/ship/123456789-sample
-  ```
+Fetches the current status of a detection job.
 
-### 3. Detection Routes (`/api/detect`)
-Performs detection (ship or oil spill) on a specified image using its DZI tiles. Proxies to Python backend. Requires DZI to be generated first.
+**Method:** GET
+**Path Parameters:**
 
-#### POST `/api/detect/:type/:imageId`
-Runs detection for the specified type and image.
+* `jobId`: Job identifier
 
-- **Method**: POST
-- **Parameters**:
-  - `type` (path parameter): Type of detection. Must be `"ship"` or `"oilspill"`.
-  - `imageId` (path parameter): Unique ID of the uploaded image.
-- **Body**: None
-- **Response**:
-  - **Success (200)**:
-    ```json
-    {
-      "message": "Ship detection completed" | "Oil spill detection completed",
-      "data": {
-        "message": "Ship DZI detection complete." | "Oilspill DZI detection complete.",
-        "count": <number-of-detections-or-keys>,
-        "detections": <array-or-object (see notes)>
-      }
-    }
-    ```
-  - **Error (400)**:
-    ```json
-    {
-      "error": "Invalid type. Use \"ship\" or \"oilspill\"." | "Image ID required"
-    }
-    ```
-  - **Error (500)**:
-    ```json
-    {
-      "error": "<type> detection failed" | "<other-error-from-python (e.g., Tile folder not found)>"
-    }
-    ```
-- **Notes**:
-  - Detection uses the deepest zoom level (e.g., "15") from the DZI tiles.
-  - For `"ship"`:
-    - `"count"`: Number of detected ships.
-    - `"detections"`: Array of objects, each:
-      ```json
-      {
-        "x": <float (global x-coordinate)>,
-        "y": <float (global y-coordinate)>,
-        "w": <float (width)>,
-        "h": <float (height)>,
-        "label": "<string (e.g., 'object')>",
-        "score": <float (confidence score, >0.5)>
-      }
-      ```
-    - NMS (Non-Maximum Suppression) is applied with IoU threshold 0.5.
-  - For `"oilspill"`:
-    - `"count"`: 3 (fixed, number of keys in detections).
-    - `"detections"`: Object with:
-      ```json
-      {
-        "stitched_mask": "<absolute-path-to-stitched-mask-png>",
-        "dzi_path": "<absolute-path-to-dzi-directory (e.g., .../outputs/oilspill/<imageId>)>",
-        "dzi_folder": "<absolute-path-to-tiles-folder (e.g., .../outputs/oilspill/<imageId>/<imageId>_files)>"
-      }
-      ```
-    - Generates a stitched mask PNG and its DZI (tile size 256). Access via `/outputs/oilspill/<imageId>.dzi` and tiles via `/outputs/oilspill/<imageId>_files/...`.
-- **Example**:
-  ```bash
-  curl -X POST http://localhost:3000/api/detect/ship/123456789-sample
-  ```
+**Response (200):**
 
-### 4. Static File Routes
-Serves static files (tiles and outputs) for viewing.
+```json
+{
+  "jobId": "<uuid>",
+  "type": "ship",
+  "imageId": "<image-id>",
+  "status": "completed",
+  "detectionsCount": 12,
+  "createdAt": "<timestamp>",
+  "updatedAt": "<timestamp>"
+}
+```
 
-#### GET `/tiles/oilspill/*`
-Serves DZI tiles for oil spill images.
+**Possible Status Values:**
 
-- **Method**: GET
-- **Path**: `/tiles/oilspill/<imageId>/<imageId>.dzi` or `/tiles/oilspill/<imageId>/<imageId>_files/<zoom>/<x>_<y>.jpeg`
-- **Response**: Serves the requested DZI file or tile image (JPEG).
+* `queued`: Job created and waiting for processing
+* `running`: Detection process started
+* `completed`: Detection finished successfully
+* `failed`: Detection failed or could not start
 
-#### GET `/tiles/ship/*`
-Serves DZI tiles for ship images.
+**Example - Failed Job:**
 
-- **Method**: GET
-- **Path**: `/tiles/ship/<imageId>/<imageId>.dzi` or `/tiles/ship/<imageId>/<imageId>_files/<zoom>/<x>_<y>.jpeg`
-- **Response**: Serves the requested DZI file or tile image (JPEG).
+```json
+{
+  "jobId": "<uuid>",
+  "status": "failed",
+  "error": "Tile folder not found"
+}
+```
 
-#### GET `/outputs/oilspill/*`
-Serves oil spill detection output files, including stitched masks and mask DZIs.
+---
 
-- **Method**: GET
-- **Path**: `/outputs/oilspill/<imageId>_oilspill_mask.png` or `/outputs/oilspill/<imageId>.dzi` or `/outputs/oilspill/<imageId>_files/<zoom>/<x>_<y>.jpeg`
-- **Response**: Serves the requested file (PNG for mask, XML for DZI, JPEG for tiles).
+## 4. Static File Routes
 
-## Notes
-- **File Size Limit**: Image uploads are limited to 5GB.
-- **File Type**: Only TIFF files (`.tif` or `.tiff`) are accepted for uploads.
-- **Python Backend**: DZI generation and detection proxy to a Python backend at `http://localhost:8000` (configurable via `PYTHON_API_BASE`). Ensure it's running.
-- **CORS**: Enabled for cross-origin requests.
-- **File Storage**:
-  - Uploaded images: `shared/uploads/<type>/`.
-  - DZI tiles: `shared/tiles/<type>/<imageId>/`.
-  - Oil spill outputs (masks and DZIs): `shared/outputs/oilspill/<imageId>/` (but files are placed directly under `oilspill/` with `<imageId>` prefix).
-- **Prerequisites**: For detection, generate DZI first as it uses the tiles.
-- **Models**: Ship uses Deformable DETR; Oil spill uses Vision Transformer. Models loaded from configured paths.
+| Route                 | Description                            |
+| --------------------- | -------------------------------------- |
+| `/tiles/ship/*`       | Serves DZI tiles for ship imagery      |
+| `/tiles/oilspill/*`   | Serves DZI tiles for oil spill imagery |
+| `/outputs/oilspill/*` | Serves oil spill mask outputs and DZIs |
+
+**Example Requests:**
+
+```
+GET /outputs/oilspill/<imageId>_oilspill_mask.png
+GET /outputs/oilspill/<imageId>.dzi
+```
+
+---
+
+## 5. MongoDB Models
+
+### Job Model
+
+Tracks detection job progress and results.
+
+| Field           | Type                                                | Description                       |
+| --------------- | --------------------------------------------------- | --------------------------------- |
+| jobId           | String                                              | Unique job identifier             |
+| type            | String (`ship` or `oilspill`)                       | Detection type                    |
+| imageId         | String                                              | Image identifier                  |
+| status          | String (`queued`, `running`, `completed`, `failed`) | Current job status                |
+| detectionsCount | Number or `null`                                    | Number of detections (ships only) |
+| error           | String                                              | Error message (if any)            |
+| createdAt       | Date                                                | Timestamp of job creation         |
+| updatedAt       | Date                                                | Timestamp of last update          |
+
+### Detection Model
+
+Stores results of ship detections only.
+
+| Field      | Type   | Description                                     |
+| ---------- | ------ | ----------------------------------------------- |
+| imageId    | String | Associated image ID                             |
+| type       | String | Always `ship`                                   |
+| detections | Array  | Bounding box results (x, y, w, h, label, score) |
+
+---
+
+## 6. Workflow Summary
+
+1. Upload image → `POST /api/images/upload/:type`
+2. Generate DZI → `POST /api/dzi/generate/:type/:imageId`
+3. Start detection → `POST /api/detect/:type/:imageId` (returns jobId)
+4. Poll job status → `GET /api/detect/status/:jobId`
+5. Retrieve results:
+
+   * Ship: Bounding boxes stored in MongoDB
+   * Oilspill: Mask available in `/outputs/oilspill/`
+
+---
+
+## 7. Configuration and Environment Variables
+
+The system requires the following environment variables:
+
+```
+PYTHON_API_BASE=http://localhost:8000
+NODE_BASE=http://localhost:3000
+PORT=3000
+```
+
+Ensure both Node.js and Python servers are running concurrently for proper operation.
