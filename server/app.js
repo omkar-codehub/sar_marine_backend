@@ -5,7 +5,9 @@ const imageRoutes = require('./routes/imageRoutes');
 const dziRoutes = require('./routes/dziRoutes');
 const detectionRoutes = require('./routes/detectionRoutes');
 const path = require('path');
+const mongoose = require('mongoose');
 
+mongoose.connect('mongodb://127.0.0.1:27017/sardb').then(()=>console.log('Conntected to db')).catch((e)=>console.error(e))
 
 const app = express();
 const PORT = process.env.PORT || 3000;
