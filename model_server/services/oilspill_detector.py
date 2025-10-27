@@ -7,7 +7,7 @@ from services.oilspill_util import VisionTransformer, get_r50_b16_config, Resize
 from services.stitch import stitch_predicted_folder
 from config import OILSPILL_MODEL_PATH, OUTPUTS_DIR, TILES_DIR
 from services.dzi_service import generate_dzi
-TILE_SIZE = 512
+TILE_SIZE = 256
 OVERLAP = 1
 
 # Set up model (load once)
@@ -18,7 +18,7 @@ model = VisionTransformer(config, img_size=(224, 224),  # or whatever your actua
                           num_classes=config.n_classes).to(device)
 
 # load weights
-model.load_state_dict(torch.load(str(OILSPILL_MODEL_PATH), map_location=device))
+model.load_state_dict(torch.load(str(OILSPILL_MODEL_PATH), map_location=device, weights_only=False))
 model.eval()
 
 # transform

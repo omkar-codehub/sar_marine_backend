@@ -13,7 +13,7 @@ def dzi_endpoint(type: str, image_id: str):
         return {"error": f"Invalid type: {type}. Must be 'ship' or 'oilspill'."}
 
     input_path = UPLOADS_DIR / type / f"{image_id}.tiff"
-    output_dir = TILES_DIR / type / image_id
+    output_dir = TILES_DIR / type
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if not input_path.exists():
@@ -28,7 +28,7 @@ def dzi_endpoint(type: str, image_id: str):
 
         return {
             "message": "DZI generated successfully",
-            "dzi_url": f"/tiles/{type}/{image_id}/{image_id}.dzi"
+            "dzi_url": f"/tiles/{type}/{image_id}.dzi"
         }
 
     except Exception as e:
