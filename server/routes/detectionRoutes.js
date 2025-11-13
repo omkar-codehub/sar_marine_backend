@@ -9,5 +9,6 @@ router.post('/:type/:imageId', detectionController.runDetection);
 
 // Webhook endpoint for Python to POST back detection results
 router.post('/webhook', detectionController.receiveWebhook);
+router.get('/ship/:imageId', detectionController.getShipDetections);
 
 module.exports = router;

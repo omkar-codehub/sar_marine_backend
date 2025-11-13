@@ -17,6 +17,7 @@ __pycache__/
 *.onnx
 *.safetensors
 model_server/models/*.json
+model_server/models/*.zip
 # Virtual environments
 venv/
 env/

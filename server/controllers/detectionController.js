@@ -135,3 +135,21 @@ exports.getJobStatus = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+exports.getShipDetections = async (req, res) => {
+  try {
+    const { imageId } = req.params;
+    const detectionDoc = await Detection.findOne({ imageId, type: 'ship' });
+    if (!detectionDoc) {
+      return res.status(404).json({ error: 'No ship detections found for this image' });
+    }
+    res.json({
+      imageId: detectionDoc.imageId,
+      detections: detectionDoc.detections,
+      createdAt: detectionDoc.createdAt,
+    });
+  } catch (err) {
+    console.error('Error fetching ship detections:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
